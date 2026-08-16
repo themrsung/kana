@@ -1,0 +1,38 @@
+{
+  "name": "kana",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/copy-dict.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/copy-dict.mjs",
+    "build": "tsc -b --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "fetch:edinet": "vite-node scripts/fetch-edinet.ts",
+    "crop:pdf": "vite-node scripts/crop-pdf.ts"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^5.2.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@sglkc/kuromoji": "^1.1.0",
+    "pdfjs-dist": "^6.2.108",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

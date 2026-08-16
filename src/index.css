@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Kana is the thing the eye must land on, so it gets its own scale. */
+  --text-kana: 3.5rem;
+  --text-kana--line-height: 1.15;
+  --text-kana-sm: 1.75rem;
+  --text-kana-sm--line-height: 1.2;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-neutral-950 text-neutral-100 antialiased;
+  /* Typing practice means a lot of repeated keys - never let the page scroll
+     out from under the user, and never select text on a stray double-click. */
+  overscroll-behavior: none;
+}
+
+/* Visible focus everywhere, including for mouse users. The app is keyboard-first;
+   a focus ring that hides itself is a bug here. */
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-amber-400;
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
