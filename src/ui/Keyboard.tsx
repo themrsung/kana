@@ -18,6 +18,8 @@ interface Props {
   readonly press: KeyPress | null;
   /** Kana in the current token that this board physically cannot produce. */
   readonly unreachable: readonly string[];
+  /** Mistypes per physical key, for the heatmap tint. */
+  readonly heat?: ReadonlyMap<string, number>;
 }
 
 /**
@@ -25,8 +27,9 @@ interface Props {
  * headline and the latin legend is the footnote; in romaji mode they swap, so
  * the same component teaches both layouts without pretending they are the same.
  */
-export function Keyboard({ board, mode, press, unreachable }: Props) {
+export function Keyboard({ board, mode, press, unreachable, heat }: Props) {
   const rows = BOARD_ROWS[board];
+  const worst = heat ? Math.max(1, ...heat.values()) : 1;
   return (
     <div className="no-select flex flex-col items-center gap-1.5 rounded-2xl border border-neutral-800 bg-neutral-900/40 px-4 py-5">
       {rows.map((row, r) => (
@@ -41,6 +44,8 @@ export function Keyboard({ board, mode, press, unreachable }: Props) {
                 mode={mode}
                 lit={press?.code === code}
                 litShift={press?.code === code && press.shift}
+                heat={(heat?.get(code) ?? 0) / worst}
+                misses={heat?.get(code) ?? 0}
               />
             ) : null;
           })}
@@ -80,12 +85,17 @@ function Key({
   mode,
   lit,
   litShift,
+  heat,
+  misses,
 }: {
   readonly k: KanaKey;
   readonly board: Board;
   readonly mode: InputMode;
   readonly lit: boolean;
   readonly litShift: boolean;
+  /** 0-1, share of the worst key's mistypes. */
+  readonly heat: number;
+  readonly misses: number;
 }) {
   const latin = board === 'jis' ? k.jis : (k.ansi ?? k.jis);
   const main = mode === 'kana' ? k.plain : latin;
@@ -110,8 +120,17 @@ function Key({
             ? 'border-dashed border-neutral-700 bg-neutral-900/50'
             : 'border-neutral-800 bg-neutral-900/70')
       }
-      title={k.nonStandard ? `${k.code} — extension, not on a real JIS board` : k.code}
+      title={[k.code, misses > 0 ? `${misses} mistyped` : null, k.nonStandard ? 'extension, not on a real JIS board' : null]
+        .filter(Boolean)
+        .join(' — ')}
     >
+      {heat > 0 && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-md bg-rose-500"
+          style={{ opacity: 0.15 + heat * 0.55 }}
+        />
+      )}
       {sub && (
         <span
           className={
@@ -124,6 +143,7 @@ function Key({
       )}
       <span
         className={
+          'relative ' +
           (mode === 'kana' ? 'font-sans text-base' : 'font-mono text-sm') +
           ' leading-none ' +
           (lit ? 'text-amber-100' : 'text-neutral-300')

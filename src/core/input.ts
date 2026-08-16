@@ -21,7 +21,7 @@ import {
   type KanaMatch,
   type KanaPlan,
 } from './kana/engine';
-import { kanaFor, type Board, type KeyPress } from './kana/layout';
+import { kanaFor, keyForKana, type Board, type KeyPress } from './kana/layout';
 import {
   buildRomajiPlan,
   expectation,
@@ -68,6 +68,14 @@ export interface FeedOutcome {
  */
 export function charForKey(config: InputConfig, code: string, shift: boolean): string | null {
   return config.mode === 'kana' ? kanaFor(code, shift) : asciiFor(code, shift);
+}
+
+/**
+ * The inverse of `charForKey`: which physical key produces this character?
+ * Used to put the mistyped-key heatmap back onto the keyboard picture.
+ */
+export function pressForChar(config: InputConfig, char: string): KeyPress | null {
+  return config.mode === 'kana' ? keyForKana(char) : keyForAscii(char);
 }
 
 export function buildPlan(target: string, config: InputConfig = DEFAULT_CONFIG): Plan {

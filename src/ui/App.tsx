@@ -3,6 +3,7 @@ import {
   DEFAULT_CONFIG,
   charForKey,
   planExpectation,
+  pressForChar,
   unreachable,
   type InputConfig,
 } from '../core/input';
@@ -24,6 +25,7 @@ import { SAMPLE_TITLE, SAMPLE_TOKENS } from '../data/sample';
 import { CurrentToken, EmptyToken, NextToken, type Hint } from './TokenCard';
 import { Keyboard } from './Keyboard';
 import { SourcePanel, type LoadState } from './SourcePanel';
+import { Summary } from './Summary';
 import { StatsBar } from './StatsBar';
 
 /** The three ways in this app can be driven. Kana mode needs a board to name keys. */
@@ -166,6 +168,17 @@ export default function App() {
   const exp = plan && plan.mode === session.match.mode ? planExpectation(plan, session.match) : null;
   const blocked = plan ? unreachable(plan, config) : [];
 
+  // The heatmap is stored by mistyped character; the board needs physical keys.
+  const heat = useMemo(() => {
+    const byCode = new Map<string, number>();
+    for (const [char, count] of Object.entries(session.heatmap)) {
+      const press = pressForChar(session.config, char);
+      if (!press) continue;
+      byCode.set(press.code, (byCode.get(press.code) ?? 0) + count);
+    }
+    return byCode;
+  }, [session.heatmap, session.config]);
+
   const scheme = hintId === null ? null : schemeById(hintId);
   const hintFor = (reading: string): Hint | null =>
     scheme ? { label: scheme.label, text: scheme.respell(reading) } : null;
@@ -215,7 +228,7 @@ export default function App() {
         <StatsBar m={m} total={session.tokens.length} />
 
         {done ? (
-          <Finished onRestart={() => restart()} />
+          <Summary session={session} m={m} onRestart={() => restart()} />
         ) : session.paused ? (
           <Paused />
         ) : (
@@ -242,12 +255,13 @@ export default function App() {
           </div>
         )}
 
-        {showBoard && !done && (
+        {showBoard && (
           <Keyboard
             board={config.mode === 'kana' ? config.board : 'ansi'}
             mode={config.mode}
-            press={session.paused ? null : (exp?.press ?? null)}
-            unreachable={blocked}
+            press={session.paused || done ? null : (exp?.press ?? null)}
+            unreachable={done ? [] : blocked}
+            heat={heat}
           />
         )}
 
@@ -351,16 +365,6 @@ function Paused() {
       <div className="font-mono text-sm text-neutral-500">
         <Kbd>Esc</Kbd> to resume
       </div>
-    </div>
-  );
-}
-
-function Finished({ onRestart }: { readonly onRestart: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-emerald-900/60 bg-emerald-950/20 py-16">
-      <div className="text-3xl text-emerald-300">完走しました</div>
-      <div className="text-sm text-neutral-400">Session complete.</div>
-      <Button onClick={onRestart}>Run it again</Button>
     </div>
   );
 }
