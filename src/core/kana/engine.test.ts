@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BOARD_ROWS,
   DAKUTEN,
+  engravingFor,
   HANDAKUTEN,
   KANA_KEYS,
   kanaFor,
@@ -77,6 +78,36 @@ describe('layout integrity', () => {
   it('loses exactly ー and ろ on a US-ANSI board', () => {
     expect(unreachableKana('jis')).toEqual([]);
     expect(unreachableKana('ansi')).toEqual(['ー', 'ろ']);
+  });
+
+  it('engraves the ANSI board in katakana and the JIS board in hiragana', () => {
+    for (const key of KANA_KEYS) {
+      for (const kana of [key.plain, key.shifted]) {
+        if (!kana) continue;
+        expect(engravingFor('jis', kana)).toBe(kana);
+      }
+    }
+    expect(engravingFor('ansi', 'あ')).toBe('ア');
+    expect(engravingFor('ansi', 'ヶ')).toBe('ヶ');
+    // Marks and punctuation are script-neutral and must survive untouched.
+    expect(engravingFor('ansi', DAKUTEN)).toBe(DAKUTEN);
+    expect(engravingFor('ansi', HANDAKUTEN)).toBe(HANDAKUTEN);
+    expect(engravingFor('ansi', '「」、。・ー')).toBe('「」、。・ー');
+  });
+
+  it('keeps every ANSI keycap distinct once folded to katakana', () => {
+    const seen = new Map<string, string>();
+    const collisions: string[] = [];
+    for (const key of KANA_KEYS) {
+      for (const kana of [key.plain, key.shifted]) {
+        if (!kana) continue;
+        const cap = engravingFor('ansi', kana);
+        const prev = seen.get(cap);
+        if (prev !== undefined) collisions.push(`${cap}: ${prev} / ${key.code}`);
+        seen.set(cap, key.code);
+      }
+    }
+    expect(collisions).toEqual([]);
   });
 
   it('draws every kana key on both boards, minus the two ANSI is missing', () => {

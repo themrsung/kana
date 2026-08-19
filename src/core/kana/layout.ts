@@ -165,6 +165,34 @@ export function unreachableKana(board: Board): readonly string[] {
   return out;
 }
 
+// --- engravings -------------------------------------------------------------
+
+const HIRAGANA_START = 0x3041; // ぁ
+const HIRAGANA_END = 0x3096; // ゖ
+
+/** ぁ-ゖ → ァ-ヶ. Voicing marks, 、。「」・ and ー are script-neutral and pass through. */
+function toKatakana(input: string): string {
+  let out = '';
+  for (const ch of input) {
+    const code = ch.codePointAt(0)!;
+    out += code >= HIRAGANA_START && code <= HIRAGANA_END ? String.fromCodePoint(code + 0x60) : ch;
+  }
+  return out;
+}
+
+/**
+ * The kana as printed on this board's keycaps: hiragana on JIS, which is what a real
+ * JIS X 6002 board is engraved with, and katakana on US-ANSI, which has no kana
+ * printing of its own to be faithful to.
+ *
+ * Drawing only. `kanaFor` emits hiragana on both boards and the engine, the prompt and
+ * the scoring all stay in hiragana - the keystrokes are identical either way, so the
+ * script on the cap is a legend, not a mode.
+ */
+export function engravingFor(board: Board, kana: string): string {
+  return board === 'ansi' ? toKatakana(kana) : kana;
+}
+
 // --- voicing ----------------------------------------------------------------
 // が is not a key. It is か followed by the ゛ key, and the app scores it as two
 // keystrokes because that is what the typist's hands actually do.

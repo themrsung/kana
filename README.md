@@ -26,6 +26,9 @@ gitignored — it is a build input, not source).
 - **Two physical keyboards**, side by side and switchable: a full JIS board, and
   a US-ANSI MacBook Air. The Air has no `¥` or `ろ` key, so **ー and ろ are
   untypeable on it** — the app says so out loud rather than quietly skipping them.
+  The JIS board is drawn in hiragana, as it is really engraved; the ANSI board,
+  which has no kana printing of its own to copy, is drawn in katakana. That is a
+  legend, not a mode — both boards send the same keystrokes.
 - **Four pronunciation respellings** under each token, individually switchable:
   romaji, 한글, English, Spanish.
 - **Any UTF-8-decodable text**: `.txt` `.md` `.pdf` `.json` `.html`, or a paste.

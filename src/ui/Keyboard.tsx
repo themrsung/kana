@@ -2,6 +2,7 @@ import {
   BOARD_ROWS,
   BOARD_THUMBS,
   DAKUTEN,
+  engravingFor,
   HANDAKUTEN,
   keyByCode,
   type Board,
@@ -26,6 +27,10 @@ interface Props {
  * A picture of the physical board. In kana mode the kana engraving is the
  * headline and the latin legend is the footnote; in romaji mode they swap, so
  * the same component teaches both layouts without pretending they are the same.
+ *
+ * The JIS board is drawn in hiragana, as it is really engraved; the US-ANSI board,
+ * which carries no kana printing to copy, is drawn in katakana. Both send the same
+ * keystrokes - see `engravingFor`.
  */
 export function Keyboard({ board, mode, press, unreachable, heat }: Props) {
   const rows = BOARD_ROWS[board];
@@ -98,14 +103,14 @@ function Key({
   readonly misses: number;
 }) {
   const latin = board === 'jis' ? k.jis : (k.ansi ?? k.jis);
-  const main = mode === 'kana' ? k.plain : latin;
+  const main = mode === 'kana' ? engravingFor(board, k.plain) : latin;
   // In kana mode the corner carries the shift-layer kana; in romaji mode it
   // carries the shifted ASCII, but only where shift does something more
   // interesting than capitalising a letter.
   const shifted = asciiFor(k.code, true);
   const sub =
     mode === 'kana'
-      ? (k.shifted ?? null)
+      ? (k.shifted ? engravingFor(board, k.shifted) : null)
       : shifted && shifted !== asciiFor(k.code, false)?.toUpperCase()
         ? shifted
         : null;
