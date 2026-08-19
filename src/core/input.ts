@@ -67,7 +67,7 @@ export interface FeedOutcome {
  * nothing typeable (a dead key on the board, or a symbol the mode cannot use).
  */
 export function charForKey(config: InputConfig, code: string, shift: boolean): string | null {
-  return config.mode === 'kana' ? kanaFor(code, shift) : asciiFor(code, shift);
+  return config.mode === 'kana' ? kanaFor(config.board, code, shift) : asciiFor(code, shift);
 }
 
 /**
@@ -75,11 +75,13 @@ export function charForKey(config: InputConfig, code: string, shift: boolean): s
  * Used to put the mistyped-key heatmap back onto the keyboard picture.
  */
 export function pressForChar(config: InputConfig, char: string): KeyPress | null {
-  return config.mode === 'kana' ? keyForKana(char) : keyForAscii(char);
+  return config.mode === 'kana' ? keyForKana(config.board, char) : keyForAscii(char);
 }
 
 export function buildPlan(target: string, config: InputConfig = DEFAULT_CONFIG): Plan {
-  return config.mode === 'kana' ? buildKanaPlan(target) : buildRomajiPlan(target, config.options);
+  return config.mode === 'kana'
+    ? buildKanaPlan(target, config.board)
+    : buildRomajiPlan(target, config.options);
 }
 
 export function startPlan(plan: Plan): Match {

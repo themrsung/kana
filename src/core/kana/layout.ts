@@ -25,8 +25,8 @@ export interface KanaKey {
   readonly plain: string;
   /** Kana produced with shift held, if any. */
   readonly shifted?: string;
-  /** Latin/symbol engraving on a JIS keycap. */
-  readonly jis: string;
+  /** Latin/symbol engraving on a JIS keycap; `null` when the key is absent. */
+  readonly jis: string | null;
   /** Latin/symbol engraving on a US-ANSI keycap; `null` when the key is absent. */
   readonly ansi: string | null;
   /** Outside JIS X 6002 - see the ヶ note below. */
@@ -37,9 +37,18 @@ export interface KanaKey {
  * ヶ is not on a real JIS kana board. The spec asks for it in the shift layer, so it
  * sits on Shift+け (the physical `:` key) as a documented extension, flagged so the
  * on-screen keyboard can mark it and the README can explain it.
+ *
+ * The backtick is the same kind of exception, in the other direction: it exists only
+ * on the ANSI board. See the note on the key itself.
  */
 export const KANA_KEYS: readonly KanaKey[] = [
   // --- number row ------------------------------------------------------------
+  // The ANSI overflow key. JIS carries one extra key in this row (¥ → ー) and one in
+  // the bottom row (ろ); ANSI has neither, and every other key in its alphanumeric
+  // block already produces a kana. So both fold onto the backtick - ー unshifted, ろ
+  // shifted - which is invented, not JIS, and drawn dashed to say so. Absent from the
+  // JIS board, where the real keys exist and this position is 半角/全角.
+  { code: 'Backquote', plain: 'ー', shifted: 'ろ', jis: null, ansi: '`', nonStandard: true },
   { code: 'Digit1', plain: 'ぬ', jis: '1', ansi: '1' },
   { code: 'Digit2', plain: 'ふ', jis: '2', ansi: '2' },
   { code: 'Digit3', plain: 'あ', shifted: 'ぁ', jis: '3', ansi: '3' },
@@ -105,7 +114,7 @@ export const BOARD_ROWS: Record<Board, readonly (readonly string[])[]> = {
     ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma', 'Period', 'Slash', 'IntlRo'],
   ],
   ansi: [
-    ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal'],
+    ['Backquote', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal'],
     ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO', 'KeyP', 'BracketLeft', 'BracketRight', 'Backslash'],
     ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK', 'KeyL', 'Semicolon', 'Quote'],
     ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma', 'Period', 'Slash'],
@@ -124,10 +133,15 @@ export function keyByCode(code: string): KanaKey | null {
   return BY_CODE.get(code) ?? null;
 }
 
-/** The kana (or voicing mark) a physical key produces. */
-export function kanaFor(code: string, shift: boolean): string | null {
+/**
+ * The kana (or voicing mark) a physical key produces on this board. Board-aware because
+ * the two boards do not merely differ in legends: ¥ and ろ are absent from ANSI, and the
+ * backtick overflow key is absent from JIS. Pressing a key the board does not have
+ * produces nothing, the same as pressing it in the air.
+ */
+export function kanaFor(board: Board, code: string, shift: boolean): string | null {
   const key = BY_CODE.get(code);
-  if (!key) return null;
+  if (!key || !boardHasCode(board, code)) return null;
   if (shift) return key.shifted ?? null;
   return key.plain;
 }
@@ -137,30 +151,43 @@ export interface KeyPress {
   readonly shift: boolean;
 }
 
-const BY_KANA = new Map<string, KeyPress>();
-for (const key of KANA_KEYS) {
-  if (!BY_KANA.has(key.plain)) BY_KANA.set(key.plain, { code: key.code, shift: false });
-  if (key.shifted && !BY_KANA.has(key.shifted)) BY_KANA.set(key.shifted, { code: key.code, shift: true });
+// One map per board, because ー and ろ live on different physical keys depending on
+// which board you are sitting at. Keys the board does not have never enter its map.
+const BY_KANA: Record<Board, Map<string, KeyPress>> = { jis: new Map(), ansi: new Map() };
+for (const board of ['jis', 'ansi'] as const) {
+  const map = BY_KANA[board];
+  for (const key of KANA_KEYS) {
+    if (!boardHasCode(board, key.code)) continue;
+    if (!map.has(key.plain)) map.set(key.plain, { code: key.code, shift: false });
+    if (key.shifted && !map.has(key.shifted)) map.set(key.shifted, { code: key.code, shift: true });
+  }
 }
 
-/** Which physical key produces this kana, if any. */
-export function keyForKana(kana: string): KeyPress | null {
-  return BY_KANA.get(kana) ?? null;
+/** Which physical key produces this kana on this board, if any. */
+export function keyForKana(board: Board, kana: string): KeyPress | null {
+  return BY_KANA[board].get(kana) ?? null;
 }
 
 export function boardHasCode(board: Board, code: string): boolean {
   const key = BY_CODE.get(code);
   if (!key) return false;
-  return board === 'jis' ? true : key.ansi !== null;
+  return (board === 'jis' ? key.jis : key.ansi) !== null;
 }
 
-/** Kana that simply cannot be produced on this board. Surfaced in the UI, never hidden. */
+/**
+ * Kana that simply cannot be produced on this board. Surfaced in the UI, never hidden.
+ *
+ * Asks about the kana, not the key: ー and ろ sit on keys ANSI lacks, but the overflow
+ * key reaches them, so ANSI is no longer missing anything. Empty for both boards today,
+ * and kept because the next layout change could make it non-empty again.
+ */
 export function unreachableKana(board: Board): readonly string[] {
   const out: string[] = [];
   for (const key of KANA_KEYS) {
     if (boardHasCode(board, key.code)) continue;
-    out.push(key.plain);
-    if (key.shifted) out.push(key.shifted);
+    for (const kana of [key.plain, key.shifted]) {
+      if (kana && !keyForKana(board, kana)) out.push(kana);
+    }
   }
   return out;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BOARD_ROWS,
+  boardHasCode,
   DAKUTEN,
   engravingFor,
   HANDAKUTEN,
@@ -8,6 +9,7 @@ import {
   kanaFor,
   keyForKana,
   unreachableKana,
+  type Board,
 } from './layout';
 import {
   buildKanaPlan,
@@ -34,50 +36,81 @@ function typeAll(plan: KanaPlan, input: string): { match: KanaMatch; rejectedAt:
 }
 
 describe('layout integrity', () => {
-  it('never puts one kana on two different keys', () => {
-    const seen = new Map<string, string>();
+  // Per board, not globally: ー and ろ are deliberately on two keys across the pair,
+  // the real JIS ones and the ANSI overflow key. Only a clash *within* one board is a bug.
+  it('never puts one kana on two different keys of the same board', () => {
     const conflicts: string[] = [];
-    for (const key of KANA_KEYS) {
-      for (const kana of [key.plain, key.shifted]) {
-        if (!kana) continue;
-        const prev = seen.get(kana);
-        if (prev !== undefined) conflicts.push(`${kana}: ${prev} / ${key.code}`);
-        seen.set(kana, key.code);
+    for (const board of ['jis', 'ansi'] as const) {
+      const seen = new Map<string, string>();
+      for (const key of KANA_KEYS) {
+        if (!boardHasCode(board, key.code)) continue;
+        for (const kana of [key.plain, key.shifted]) {
+          if (!kana) continue;
+          const prev = seen.get(kana);
+          if (prev !== undefined) conflicts.push(`${board} ${kana}: ${prev} / ${key.code}`);
+          seen.set(kana, key.code);
+        }
       }
     }
     expect(conflicts).toEqual([]);
   });
 
   it('round-trips every kana back to the key that makes it', () => {
-    for (const key of KANA_KEYS) {
-      expect(keyForKana(key.plain)).toEqual({ code: key.code, shift: false });
-      if (key.shifted) expect(keyForKana(key.shifted)).toEqual({ code: key.code, shift: true });
+    for (const board of ['jis', 'ansi'] as const) {
+      for (const key of KANA_KEYS) {
+        if (!boardHasCode(board, key.code)) continue;
+        expect(keyForKana(board, key.plain)).toEqual({ code: key.code, shift: false });
+        if (key.shifted) {
+          expect(keyForKana(board, key.shifted)).toEqual({ code: key.code, shift: true });
+        }
+      }
     }
   });
 
   it('reads keys off event.code, both layers', () => {
-    expect(kanaFor('KeyT', false)).toBe('か');
-    expect(kanaFor('KeyZ', false)).toBe('つ');
-    expect(kanaFor('KeyZ', true)).toBe('っ');
-    expect(kanaFor('Digit0', false)).toBe('わ');
-    expect(kanaFor('Digit0', true)).toBe('を');
-    expect(kanaFor('BracketLeft', false)).toBe(DAKUTEN);
-    expect(kanaFor('BracketRight', false)).toBe(HANDAKUTEN);
-    expect(kanaFor('BracketRight', true)).toBe('「');
-    expect(kanaFor('Backslash', false)).toBe('む');
-    expect(kanaFor('Backslash', true)).toBe('」');
-    expect(kanaFor('IntlYen', false)).toBe('ー');
-    expect(kanaFor('IntlRo', false)).toBe('ろ');
+    expect(kanaFor('jis', 'KeyT', false)).toBe('か');
+    expect(kanaFor('jis', 'KeyZ', false)).toBe('つ');
+    expect(kanaFor('jis', 'KeyZ', true)).toBe('っ');
+    expect(kanaFor('jis', 'Digit0', false)).toBe('わ');
+    expect(kanaFor('jis', 'Digit0', true)).toBe('を');
+    expect(kanaFor('jis', 'BracketLeft', false)).toBe(DAKUTEN);
+    expect(kanaFor('jis', 'BracketRight', false)).toBe(HANDAKUTEN);
+    expect(kanaFor('jis', 'BracketRight', true)).toBe('「');
+    expect(kanaFor('jis', 'Backslash', false)).toBe('む');
+    expect(kanaFor('jis', 'Backslash', true)).toBe('」');
+    expect(kanaFor('jis', 'IntlYen', false)).toBe('ー');
+    expect(kanaFor('jis', 'IntlRo', false)).toBe('ろ');
   });
 
   it('has no shift layer where JIS has none', () => {
-    expect(kanaFor('Digit1', true)).toBeNull();
-    expect(kanaFor('KeyT', true)).toBeNull();
+    expect(kanaFor('jis', 'Digit1', true)).toBeNull();
+    expect(kanaFor('jis', 'KeyT', true)).toBeNull();
   });
 
-  it('loses exactly ー and ろ on a US-ANSI board', () => {
+  it('leaves neither board missing a kana', () => {
     expect(unreachableKana('jis')).toEqual([]);
-    expect(unreachableKana('ansi')).toEqual(['ー', 'ろ']);
+    expect(unreachableKana('ansi')).toEqual([]);
+  });
+
+  // The whole point of the backtick: ー and ろ are on keys ANSI does not have, so they
+  // fold onto the one key in its alphanumeric block that carries no kana.
+  it('reaches ー and ろ on ANSI through the overflow key, and on JIS through the real ones', () => {
+    expect(keyForKana('ansi', 'ー')).toEqual({ code: 'Backquote', shift: false });
+    expect(keyForKana('ansi', 'ろ')).toEqual({ code: 'Backquote', shift: true });
+    expect(keyForKana('jis', 'ー')).toEqual({ code: 'IntlYen', shift: false });
+    expect(keyForKana('jis', 'ろ')).toEqual({ code: 'IntlRo', shift: false });
+
+    expect(kanaFor('ansi', 'Backquote', false)).toBe('ー');
+    expect(kanaFor('ansi', 'Backquote', true)).toBe('ろ');
+  });
+
+  // A board only answers for switches it actually has, in both directions.
+  it('is deaf to keys the board does not have', () => {
+    expect(kanaFor('ansi', 'IntlYen', false)).toBeNull();
+    expect(kanaFor('ansi', 'IntlRo', false)).toBeNull();
+    // 半角/全角 sits here on a real JIS board, and it is not a kana key.
+    expect(kanaFor('jis', 'Backquote', false)).toBeNull();
+    expect(kanaFor('jis', 'Backquote', true)).toBeNull();
   });
 
   it('engraves the ANSI board in katakana and the JIS board in hiragana', () => {
@@ -99,6 +132,7 @@ describe('layout integrity', () => {
     const seen = new Map<string, string>();
     const collisions: string[] = [];
     for (const key of KANA_KEYS) {
+      if (!boardHasCode('ansi', key.code)) continue;
       for (const kana of [key.plain, key.shifted]) {
         if (!kana) continue;
         const cap = engravingFor('ansi', kana);
@@ -110,11 +144,16 @@ describe('layout integrity', () => {
     expect(collisions).toEqual([]);
   });
 
-  it('draws every kana key on both boards, minus the two ANSI is missing', () => {
-    const drawn = (board: 'jis' | 'ansi') => new Set(BOARD_ROWS[board].flat());
-    const all = new Set(KANA_KEYS.map((k) => k.code));
-    expect(drawn('jis')).toEqual(all);
-    expect(drawn('ansi')).toEqual(new Set([...all].filter((c) => c !== 'IntlYen' && c !== 'IntlRo')));
+  // Each board draws exactly the keys it has - no more, so nothing unreachable is
+  // painted, and no fewer, so nothing typeable is missing from the picture.
+  it('draws exactly the keys each board has', () => {
+    for (const board of ['jis', 'ansi'] as const) {
+      const drawn = new Set(BOARD_ROWS[board].flat());
+      const has = new Set(KANA_KEYS.filter((k) => boardHasCode(board, k.code)).map((k) => k.code));
+      expect(drawn).toEqual(has);
+    }
+    expect(new Set(BOARD_ROWS.jis.flat())).not.toContain('Backquote');
+    expect(new Set(BOARD_ROWS.ansi.flat())).toContain('Backquote');
   });
 });
 
@@ -150,7 +189,7 @@ describe('keystroke sequences', () => {
   it('folds ヵ and keeps ヶ, which has its own key', () => {
     expect(buildKanaPlan('ヶ').shortest).toBe('ヶ');
     expect(buildKanaPlan('ヵ').shortest).toBe('ヶ');
-    expect(keyForKana('ヶ')).toEqual({ code: 'Quote', shift: true });
+    expect(keyForKana('jis', 'ヶ')).toEqual({ code: 'Quote', shift: true });
   });
 });
 
@@ -214,18 +253,40 @@ describe('feeding keystrokes', () => {
 });
 
 describe('board reachability', () => {
-  it('flags ー as untypable on a MacBook Air, but not on a JIS board', () => {
-    const plan = buildKanaPlan('コーヒー');
-    expect(unreachableInPlan(plan, 'ansi')).toEqual(['ー']);
-    expect(unreachableInPlan(plan, 'jis')).toEqual([]);
+  // These two used to assert that ー and ろ were untypable on a MacBook Air. The
+  // backtick overflow key is precisely the fix for that, so the assertions inverted:
+  // what is worth pinning now is that the kana arrives on a *different key*.
+  it('types ー on both boards, from different keys', () => {
+    expect(unreachableInPlan(buildKanaPlan('コーヒー', 'ansi'), 'ansi')).toEqual([]);
+    expect(unreachableInPlan(buildKanaPlan('コーヒー', 'jis'), 'jis')).toEqual([]);
+
+    const press = (board: Board) =>
+      buildKanaPlan('コーヒー', board).steps.find((s) => s.char === 'ー')?.press;
+    expect(press('ansi')).toEqual({ code: 'Backquote', shift: false });
+    expect(press('jis')).toEqual({ code: 'IntlYen', shift: false });
   });
 
-  it('flags ろ too', () => {
-    const plan = buildKanaPlan('ろく');
-    expect(unreachableInPlan(plan, 'ansi')).toEqual(['ろ']);
+  it('types ろ on both boards, from different keys', () => {
+    expect(unreachableInPlan(buildKanaPlan('ろく', 'ansi'), 'ansi')).toEqual([]);
+    expect(buildKanaPlan('ろく', 'ansi').steps[0]!.press).toEqual({
+      code: 'Backquote',
+      shift: true,
+    });
+    expect(buildKanaPlan('ろく', 'jis').steps[0]!.press).toEqual({
+      code: 'IntlRo',
+      shift: false,
+    });
   });
 
   it('says nothing about kana both boards can type', () => {
-    expect(unreachableInPlan(buildKanaPlan('がっこう'), 'ansi')).toEqual([]);
+    expect(unreachableInPlan(buildKanaPlan('がっこう', 'ansi'), 'ansi')).toEqual([]);
+  });
+
+  // The guard still has to resolve against the board rather than trust the key already
+  // baked into the plan - otherwise a JIS plan carrying IntlRo would look broken on ANSI.
+  it('re-resolves a plan built for the other board instead of trusting its keys', () => {
+    const jisPlan = buildKanaPlan('ろく', 'jis');
+    expect(jisPlan.steps[0]!.press).toEqual({ code: 'IntlRo', shift: false });
+    expect(unreachableInPlan(jisPlan, 'ansi')).toEqual([]);
   });
 });

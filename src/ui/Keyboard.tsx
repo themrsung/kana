@@ -102,7 +102,7 @@ function Key({
   readonly heat: number;
   readonly misses: number;
 }) {
-  const latin = board === 'jis' ? k.jis : (k.ansi ?? k.jis);
+  const latin = (board === 'jis' ? k.jis : k.ansi) ?? '';
   const main = mode === 'kana' ? engravingFor(board, k.plain) : latin;
   // In kana mode the corner carries the shift-layer kana; in romaji mode it
   // carries the shifted ASCII, but only where shift does something more

@@ -24,11 +24,15 @@ gitignored — it is a build input, not source).
 - **Two input modes.** Google-IME-style romaji, and the JIS kana layout with
   the shift layer and 濁点/半濁点 as separate keystrokes (が = か + `@`).
 - **Two physical keyboards**, side by side and switchable: a full JIS board, and
-  a US-ANSI MacBook Air. The Air has no `¥` or `ろ` key, so **ー and ろ are
-  untypeable on it** — the app says so out loud rather than quietly skipping them.
+  a US-ANSI MacBook Air. The Air is missing the `¥` and `ろ` keys that carry ー
+  and ろ, so on that board **both fold onto the backtick** — the one key in its
+  alphanumeric block that a JIS board spends on 半角/全角 and that produces no
+  kana. It is drawn dashed, and marked "extension, not on a real JIS board",
+  because that is exactly what it is: every other key is where JIS puts it, and
+  ANSI runs buy their ー on a key a real JIS typist never presses.
   The JIS board is drawn in hiragana, as it is really engraved; the ANSI board,
   which has no kana printing of its own to copy, is drawn in katakana. That is a
-  legend, not a mode — both boards send the same keystrokes.
+  legend, not a mode — the two boards differ in one key, not in what they send.
 - **Four pronunciation respellings** under each token, individually switchable:
   romaji, 한글, English, Spanish.
 - **Any UTF-8-decodable text**: `.txt` `.md` `.pdf` `.json` `.html`, or a paste.

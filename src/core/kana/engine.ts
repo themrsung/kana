@@ -11,7 +11,7 @@
  */
 
 import { toHiragana } from '../romaji/matcher';
-import { decomposeKana, keyForKana, boardHasCode, type Board, type KeyPress } from './layout';
+import { decomposeKana, keyForKana, type Board, type KeyPress } from './layout';
 
 export interface KanaStep {
   /** The kana or voicing mark this keystroke emits. */
@@ -39,13 +39,17 @@ function normalise(input: string): string {
   return out;
 }
 
-export function buildKanaPlan(target: string): KanaPlan {
+/**
+ * Keystrokes never vary by board - only which key you press to make them does, so the
+ * board reaches just `press`, the on-screen hint. Defaults to the full JIS board.
+ */
+export function buildKanaPlan(target: string, board: Board = 'jis'): KanaPlan {
   const kana = normalise(target);
   const steps: KanaStep[] = [];
   const chars = [...kana];
   for (let i = 0; i < chars.length; i++) {
     for (const part of decomposeKana(chars[i]!)) {
-      steps.push({ char: part, press: keyForKana(part), kanaIndex: i });
+      steps.push({ char: part, press: keyForKana(board, part), kanaIndex: i });
     }
   }
   return { mode: 'kana', kana, steps, shortest: steps.map((s) => s.char).join('') };
@@ -124,8 +128,9 @@ export function kanaExpectation(plan: KanaPlan, match: KanaMatch): KanaExpectati
 export function unreachableInPlan(plan: KanaPlan, board: Board): readonly string[] {
   const out = new Set<string>();
   for (const step of plan.steps) {
-    if (!step.press) out.add(step.char);
-    else if (!boardHasCode(board, step.press.code)) out.add(step.char);
+    // Resolved against the board rather than trusting `step.press`, so a plan built for
+    // one board and asked about another still answers honestly.
+    if (!keyForKana(board, step.char)) out.add(step.char);
   }
   return [...out];
 }
